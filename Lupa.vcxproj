@@ -26,6 +26,7 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="Dragon.bmp" />
+    <Image Include="Fire.tga" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>

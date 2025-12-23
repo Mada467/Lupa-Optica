@@ -28,5 +28,6 @@
     <Image Include="Dragon.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="Fire.tga" />
   </ItemGroup>
 </Project>
