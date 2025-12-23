@@ -1,8 +1,7 @@
-﻿
+﻿#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "glos.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
@@ -20,12 +19,10 @@ void CALLBACK MutaJos(void);
 static GLfloat x = 0.0;
 static GLfloat y = 0.0;
 GLuint texturi[1];
-GLUquadricObj* quadric;
 
-// NOUA FUNCTIE DE INCARCARE (Fara glaux pentru imagine)
+// Incarcare textura folosind API-ul nativ Windows
 void IncarcaTextura(const char* caleFisier, int indexTextura) {
     BITMAP bmp;
-    // LoadImageA este metoda nativa Windows mult mai sigura
     HBITMAP hBmp = (HBITMAP)LoadImageA(NULL, caleFisier, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
 
     if (hBmp != NULL) {
@@ -36,73 +33,80 @@ void IncarcaTextura(const char* caleFisier, int indexTextura) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-        // Incarcam pixelii direct in memoria video
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bmp.bmWidth, bmp.bmHeight,
             0, GL_BGR_EXT, GL_UNSIGNED_BYTE, bmp.bmBits);
 
-        DeleteObject(hBmp); // Eliberam resursele Windows
-        printf("Succes: Textura %s a fost incarcata!\n", caleFisier);
+        DeleteObject(hBmp);
+        printf("Succes: Textura %s incarcata!\n", caleFisier);
     }
     else {
-        printf("EROARE NATIVA: Windows nu poate deschide: %s\n", caleFisier);
+        printf("EROARE: Nu s-a putut deschide %s\n", caleFisier);
     }
 }
 
 void myinit(void) {
     glClearColor(1.0, 1.0, 1.0, 1.0);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
 
-    // Folosim varianta scurta deoarece am setat $(ProjectDir)
+    // Incarcam textura "Dragon.bmp" din directorul proiectului
     IncarcaTextura("Dragon.bmp", 0);
 
+    // Activam transparenta pentru lentila
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    quadric = gluNewQuadric();
-    gluQuadricDrawStyle(quadric, GLU_FILL);
-    // Activeaza generarea automata a coordonatelor de textura
-    gluQuadricTexture(quadric, GL_TRUE);
 }
 
 void CALLBACK display(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
-
     glTranslatef(x, y, -300.0);
 
+  
     // 1. MANERUL (Cilindru cu textura)
+
+    GLUquadricObj* maner = gluNewQuadric();
+    gluQuadricTexture(maner, GL_TRUE); // Activam textura DOAR pentru maner
+
     glPushMatrix();
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, texturi[0]);
-    glColor3f(1.0f, 1.0f, 1.0f); // Alb pentru a nu altera culorile texturii
-
+    glColor3f(1.0f, 1.0f, 1.0f);
     glTranslatef(0.0, -35.0, 0.0);
     glRotatef(90.0, 1.0, 0.0, 0.0);
-    gluCylinder(quadric, 5, 5, 50, 20, 20);
+    gluCylinder(maner, 5, 5, 50, 20, 20);
     glPopMatrix();
 
-    // DEZACTIVAM TEXTURA pentru restul pieselor ca sa ramana colorate simplu
     glDisable(GL_TEXTURE_2D);
+    gluDeleteQuadric(maner);
 
-    // 1.1 Capat maner (Sfera)
+    
+    // 2. CAPAT MANER 
+    GLUquadricObj* capat = gluNewQuadric();
     glPushMatrix();
     glColor3f(0.7f, 0.7f, 0.7f);
     glTranslatef(0.0, -85.0, 0.0);
-    gluSphere(quadric, 5, 15, 15);
+    gluSphere(capat, 5, 15, 15);
     glPopMatrix();
+    gluDeleteQuadric(capat);
 
-    // 2. RAMA
+    
+    // 3. RAMA LENTILEI 
+    GLUquadricObj* rama = gluNewQuadric();
     glPushMatrix();
     glColor3f(0.6f, 0.6f, 0.6f);
-    gluDisk(quadric, 35, 40, 40, 1);
+    gluDisk(rama, 35, 40, 40, 1);
     glPopMatrix();
+    gluDeleteQuadric(rama);
 
-    // 3. LENTILA (Transparenta)
+    
+    // 4. LENTILA 
+   
+    GLUquadricObj* lentila = gluNewQuadric();
     glPushMatrix();
-    glColor4f(0.5f, 0.7f, 1.0f, 0.2f);
-    gluDisk(quadric, 0, 35, 40, 1);
+    glColor4f(0.5f, 0.7f, 1.0f, 0.2f); // Transparent
+    gluDisk(lentila, 0, 35, 40, 1);
     glPopMatrix();
+    gluDeleteQuadric(lentila);
 
     glFlush();
 }
@@ -124,7 +128,7 @@ void CALLBACK myReshape(GLsizei w, GLsizei h) {
 int main(int argc, char** argv) {
     auxInitDisplayMode(AUX_SINGLE | AUX_RGBA | AUX_DEPTH);
     auxInitPosition(100, 100, 800, 600);
-    auxInitWindow("Lupa Finalizata");
+    auxInitWindow("Lupa - Cod Curat");
 
     myinit();
 
