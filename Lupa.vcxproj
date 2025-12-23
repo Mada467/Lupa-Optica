@@ -24,6 +24,9 @@
   <ItemGroup>
     <ClCompile Include="Patrat.c" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="Dragon.bmp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
