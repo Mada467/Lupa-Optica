@@ -15,12 +15,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\SetupOpenGl\Grafica_IIC_2011\Laboratoare_OpenGL\Laborator2\GLOS.H">
+    <ClInclude Include="GLOS.H">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\SetupOpenGl\Grafica_IIC_2011\Laboratoare_OpenGL\Laborator2\Patrat.c">
+    <ClCompile Include="Patrat.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
