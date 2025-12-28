@@ -1,30 +1,16 @@
-﻿#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+﻿#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "glos.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glaux.h>
 
-// --- STRUCTURA TGA HEADER ---
-#pragma pack(1)
-typedef struct {
-    GLbyte  identsize;
-    GLbyte  colorMapType;
-    GLbyte  imageType;
-    unsigned short colorMapStart;
-    unsigned short colorMapLength;
-    unsigned char  colorMapBits;
-    unsigned short xstart;
-    unsigned short ystart;
-    unsigned short width;
-    unsigned short height;
-    GLbyte  bits;
-    GLbyte  descriptor;
-} TGAHEADER;
-#pragma pack(8)
+#ifndef M_PI
+#define M_PI 3.14
+#endif
 
 // --- PROTOTIPURI FUNCTII ---
 void myinit(void);
@@ -38,129 +24,174 @@ void CALLBACK MutaJos(void);
 // --- VARIABILE GLOBALE ---
 static GLfloat x = 0.0;
 static GLfloat y = 0.0;
-GLuint texturiBMP[1];
-GLbyte* pImageTGA = NULL;
-GLint iWidthTGA, iHeightTGA, iComponentsTGA;
-GLenum eFormatTGA;
+static GLfloat z = -300.0;
+GLuint texturi[3];  // 0=maner, 1=ramă, 2=imagine fundal
 
-// --- INCARCARE BMP (Textura Maner) ---
+// --- INCARCARE BMP ---
 void IncarcaTextura(const char* caleFisier, int indexTextura) {
     BITMAP bmp;
     HBITMAP hBmp = (HBITMAP)LoadImageA(NULL, caleFisier, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
 
     if (hBmp != NULL) {
         GetObject(hBmp, sizeof(bmp), &bmp);
-        glGenTextures(1, &texturiBMP[indexTextura]);
-        glBindTexture(GL_TEXTURE_2D, texturiBMP[indexTextura]);
+        glGenTextures(1, &texturi[indexTextura]);
+        glBindTexture(GL_TEXTURE_2D, texturi[indexTextura]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bmp.bmWidth, bmp.bmHeight,
             0, GL_BGR_EXT, GL_UNSIGNED_BYTE, bmp.bmBits);
         DeleteObject(hBmp);
     }
 }
 
-// --- INCARCARE TGA (Imagine Fundal) ---
-GLbyte* gltLoadTGA(const char* szFileName, GLint* iWidth, GLint* iHeight, GLint* iComponents, GLenum* eFormat) {
-    FILE* pFile = fopen(szFileName, "rb");
-    if (pFile == NULL) return NULL;
-    TGAHEADER tgaHeader;
-    fread(&tgaHeader, sizeof(TGAHEADER), 1, pFile);
-    *iWidth = tgaHeader.width;
-    *iHeight = tgaHeader.height;
-    short sDepth = tgaHeader.bits / 8;
-    unsigned long lImageSize = tgaHeader.width * tgaHeader.height * sDepth;
-    GLbyte* pBits = (GLbyte*)malloc(lImageSize);
-    if (pBits == NULL) { fclose(pFile); return NULL; }
-    fread(pBits, lImageSize, 1, pFile);
-    switch (sDepth) {
-    case 3: *eFormat = GL_BGR_EXT; *iComponents = GL_RGB8; break;
-    case 4: *eFormat = GL_BGRA_EXT; *iComponents = GL_RGBA8; break;
-    }
-    fclose(pFile);
-    return pBits;
-}
-
 void myinit(void) {
     glClearColor(1.0, 1.0, 1.0, 1.0);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_STENCIL_TEST); // ACTIVARE TEST SABLON
 
-    IncarcaTextura("Dragon.bmp", 0);
-    pImageTGA = gltLoadTGA("Fire.tga", &iWidthTGA, &iHeightTGA, &iComponentsTGA, &eFormatTGA);
+    // Încărcăm toate texturile (BMP)
+    IncarcaTextura("Lemn.bmp", 0);
+    IncarcaTextura("Lemn.bmp", 1);
+    IncarcaTextura("Saturno.bmp", 2);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
+// Funcție pentru desenare cerc texturat (pentru zoom)
+void DeseneazaCercTexturat(float centerX, float centerY, float radius, float texCenterX, float texCenterY, float texRadius) {
+    int segments = 50;
+
+    glBegin(GL_TRIANGLE_FAN);
+
+    // Centrul cercului
+    glTexCoord2f(texCenterX, texCenterY);
+    glVertex2f(centerX, centerY);
+
+    // Punctele pe circumferință
+    for (int i = 0; i <= segments; i++) {
+        float angle = 2.0f * M_PI * i / segments;
+        float cx = centerX + radius * cos(angle);
+        float cy = centerY + radius * sin(angle);
+
+        float tx = texCenterX + texRadius * cos(angle);
+        float ty = texCenterY + texRadius * sin(angle);
+
+        glTexCoord2f(tx, ty);
+        glVertex2f(cx, cy);
+    }
+
+    glEnd();
+}
+
+// Funcție pentru desenare textură fundal
+void DeseneazaFundalTextura(float zoomFactor, float centerX, float centerY) {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texturi[2]);
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    if (zoomFactor == 1.0f) {
+        // Fundal normal - întreaga imagine
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(0.0f, 0.0f);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(800.0f, 0.0f);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(800.0f, 600.0f);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(0.0f, 600.0f);
+        glEnd();
+    }
+    else {
+        // Zoom - desenăm CERC exact cât lentila
+        float lupaRadius = 90.0f;
+
+        float texCenterX = centerX / 800.0f;
+        float texCenterY = centerY / 600.0f;
+        float texRadiusX = (lupaRadius / zoomFactor) / 800.0f;
+        float texRadiusY = (lupaRadius / zoomFactor) / 600.0f;
+
+        // Calculăm media pentru aspect ratio corect
+        float texRadius = (texRadiusX + texRadiusY) / 2.0f;
+
+        // Desenăm cercul texturat
+        DeseneazaCercTexturat(centerX, centerY, lupaRadius,
+            texCenterX, texCenterY, texRadius);
+    }
+
+    glDisable(GL_TEXTURE_2D);
+}
+
 void CALLBACK display(void) {
-    // Resetam si buffer-ul Stencil (SABLON)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // --- PASUL 1: DESENARE FUNDAL NORMAL ---
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_DEPTH_TEST);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, 800, 0, 600);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
     glLoadIdentity();
 
-    // --- 1. DESENARE FUNDAL NORMAL (STARE INITIALA) ---
-    glDisable(GL_STENCIL_TEST); // Nu avem nevoie de masca pentru fundalul de baza
-    if (pImageTGA != NULL) {
-        glDisable(GL_DEPTH_TEST);
-        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
-        gluOrtho2D(0, 800, 0, 600);
-        glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glPixelZoom(1.0, 1.0); // Scara normala
-        glRasterPos2i(0, 0);
-        glDrawPixels(iWidthTGA, iHeightTGA, eFormatTGA, GL_UNSIGNED_BYTE, pImageTGA);
-        glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
-        glEnable(GL_DEPTH_TEST);
-    }
+    DeseneazaFundalTextura(1.0f, 0.0f, 0.0f);
 
-    // --- 2. CREARE MASCA (SABLON) PRIN LENTILA ---
-    glEnable(GL_STENCIL_TEST);
-    glStencilFunc(GL_ALWAYS, 1, 0xFF); // Tot ce desenam acum va pune valoarea 1 in buffer
-    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
 
-    // Nu vrem sa coloram ecranul inca, doar sa definim zona
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glDepthMask(GL_FALSE);
-
+    // --- PASUL 2: CALCULARE POZITIE LUPA ---
+    glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glTranslatef(x, y, -300.0);
-    GLUquadricObj* mascaLentila = gluNewQuadric();
-    gluDisk(mascaLentila, 0, 35, 40, 1); // Aceasta este "gaura" prin care vom vedea marirea
-    gluDeleteQuadric(mascaLentila);
-
-    // Reactivam scrierea culorilor
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_TRUE);
-
-    // --- 3. DESENARE IMAGINE MARITA IN INTERIORUL MASTII ---
-    glStencilFunc(GL_EQUAL, 1, 0xFF); // Deseneaza doar unde stencil este 1
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); // Nu mai modifica masca
-
-    if (pImageTGA != NULL) {
-        glDisable(GL_DEPTH_TEST);
-        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
-        gluOrtho2D(0, 800, 0, 600);
-        glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-
-        glPixelZoom(2.0, 2.0); // ZOOM 2X
-
-        // Aliniere dinamica: imaginea marita trebuie sa se miste invers fata de lupa pentru a parea fixa
-        glRasterPos2f(0.0f - (x / 1.0f), 0.0f - (y / 1.0f));
-
-        glDrawPixels(iWidthTGA, iHeightTGA, eFormatTGA, GL_UNSIGNED_BYTE, pImageTGA);
-        glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
-        glEnable(GL_DEPTH_TEST);
-    }
-
-    // --- 4. DESENARE COMPONENTE LUPA (MANER SI RAMA) ---
-    glDisable(GL_STENCIL_TEST); // Oprim masca pentru a vedea manerul si rama peste tot
+    gluPerspective(45.0, 800.0 / 600.0, 1.0, 1000.0);
+    glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(x, y, -300.0);
+    glTranslatef(x, y, z);
+
+    GLdouble modelMatrix[16], projMatrix[16];
+    GLint viewport[4];
+    glGetDoublev(GL_MODELVIEW_MATRIX, modelMatrix);
+    glGetDoublev(GL_PROJECTION_MATRIX, projMatrix);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    GLdouble screenX, screenY, screenZ;
+    gluProject(0, 0, 0, modelMatrix, projMatrix, viewport, &screenX, &screenY, &screenZ);
+
+    // Calculăm zoom fix (fără variație pe Z)
+    float zoomFactor = 2.0f;  // Zoom fix de 2x
+
+    // --- PASUL 3: DESENARE ZOOM (CERC PERFECT) ---
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, 800, 0, 600);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    DeseneazaFundalTextura(zoomFactor, screenX, screenY);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    // --- PASUL 4: DESENARE LUPA ---
+    glEnable(GL_DEPTH_TEST);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, 800.0 / 600.0, 1.0, 1000.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(x, y, z);
 
     // MANER
     GLUquadricObj* manerLupa = gluNewQuadric();
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, texturiBMP[0]);
+    glBindTexture(GL_TEXTURE_2D, texturi[0]);
     gluQuadricTexture(manerLupa, GL_TRUE);
     glPushMatrix();
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -173,13 +204,17 @@ void CALLBACK display(void) {
 
     // RAMA
     GLUquadricObj* ramaLupa = gluNewQuadric();
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texturi[1]);
+    gluQuadricTexture(ramaLupa, GL_TRUE);
     glPushMatrix();
-    glColor3f(0.6f, 0.6f, 0.6f);
+    glColor3f(1.0f, 1.0f, 1.0f);
     gluDisk(ramaLupa, 35, 40, 40, 1);
     glPopMatrix();
+    glDisable(GL_TEXTURE_2D);
     gluDeleteQuadric(ramaLupa);
 
-    // LENTILA (foarte transparenta pentru efect de sticla)
+    // LENTILA
     GLUquadricObj* lentilaLupa = gluNewQuadric();
     glPushMatrix();
     glColor4f(0.5f, 0.7f, 1.0f, 0.2f);
@@ -190,7 +225,7 @@ void CALLBACK display(void) {
     auxSwapBuffers();
 }
 
-// Controlul ramane identic
+// Funcții de control - DOAR deplasări
 void CALLBACK MutaStanga(void) { x -= 10; }
 void CALLBACK MutaDreapta(void) { x += 10; }
 void CALLBACK MutaSus(void) { y += 10; }
@@ -206,16 +241,18 @@ void CALLBACK myReshape(GLsizei w, GLsizei h) {
 }
 
 int main(int argc, char** argv) {
-    // ATENTIE: Am adaugat AUX_STENCIL aici!
     auxInitDisplayMode(AUX_DOUBLE | AUX_RGBA | AUX_DEPTH | AUX_STENCIL);
     auxInitPosition(100, 100, 800, 600);
-    auxInitWindow("Lupa Pasul 4 - Stencil Zoom");
+    auxInitWindow("Lupa Optica - Proiect");
     myinit();
+
+    // Control DOAR cu săgeți pentru deplasare
     auxKeyFunc(AUX_LEFT, MutaStanga);
     auxKeyFunc(AUX_RIGHT, MutaDreapta);
     auxKeyFunc(AUX_UP, MutaSus);
     auxKeyFunc(AUX_DOWN, MutaJos);
+
     auxReshapeFunc(myReshape);
     auxMainLoop(display);
     return 0;
-} 
+}

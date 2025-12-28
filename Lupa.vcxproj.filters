@@ -25,9 +25,11 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Dragon.bmp">
+    <Image Include="Saturno.bmp">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="Fire.tga" />
+    <Image Include="Lemn.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
